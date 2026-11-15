@@ -46,7 +46,7 @@ if (!existsSync(inputFile)) {
 const out = arg('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
 
 const snapshot = parseSnapshot(readFileSync(inputFile, 'utf8'));
-const { board, radar } = buildRadar(snapshot);
+const { board, radar, fit, validation } = buildRadar(snapshot);
 const issue = boardIssue(board, snapshot);
 if (issue !== null) {
   process.stderr.write(`token radar: the model wrote a board the gate refuses: ${issue}\n`);
@@ -95,5 +95,11 @@ writeFileSync(
 
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows scored (${radar.early_size} early, ${radar.live_size} live set aside)\n` +
+    `token radar: fit on ${fit.comps} comps (${fit.excluded} excluded), global ratio ${fit.global_ratio.toFixed(3)}, size slope ${fit.size_slope.toFixed(3)}, median comp TVL $${fit.median_comp_tvl}\n` +
+    `token radar: validation — 5-fold CV median error ${validation.cv.median_factor_error}x (n=${validation.cv.n}, ${Math.round(validation.cv.within_3x * 100)}% within 3x)` +
+    (validation.time_split
+      ? `, time split ${validation.time_split.median_factor_error}x (fit before ${validation.time_split.split_date}, n=${validation.time_split.test_n})`
+      : '') +
+    `, flat 0.30x baseline ${validation.baseline_median_factor_error}x\n` +
     `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ${join(out, 'dashboard')} (${dashFiles.length} files), ${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')}\n`,
 );

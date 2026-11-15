@@ -1,17 +1,73 @@
-// Farm plans for the token radar: six concrete steps per protocol, derived only
-// from the protocol's own snapshot record (category, chains, TVL, age). Every step
-// carries what it costs and how long it takes, in the step's own words, and every
-// step is kept inside the gate's 20..600 characters.
+// Farm plans for the token radar: six concrete steps per protocol, each netted
+// to the dollar. Every plan is derived only from the protocol's own snapshot
+// record (category, chains, TVL, age) and the model's implied value for it, and
+// every step is kept inside the gate's 20..600 characters.
 //
-// The numbers are the plan's own working figures, stated here so a reader can
-// check them: capital by the protocol's TVL tier, gas by its first chain's usual
-// fee tier, and a hold window by how long the protocol has been tracked. Nothing
-// here names a protocol: the same rules build every plan.
+// The economics are the plan's own working figures, stated here so a reader can
+// check them, and the dashboard states them too:
+//
+//   capital        by the protocol's TVL tier: $250 at $1B+, $150 at $100M+,
+//                  $100 at $10M+, $50 below
+//   gas            by the plan chain's usual fee tier, one transaction at a
+//                  time: 2 to set up, 1 a week while holding, 1 to exit
+//   time           15 minutes to set up, 10 a week while holding, 10 to claim,
+//                  5 to log, 5 to exit — priced at $25 an hour, because a
+//                  farmer's time is a cost like any other
+//   opportunity    the capital at 5% a year over the hold, for what it would
+//                  have earned parked elsewhere
+//   airdrop pool   7% of the implied value, the community's share at launch
+//                  (typical launches give 5-15% to the community)
+//   farmers        about 1,000 per square root of $1M of TVL, clamped to
+//                  500..500,000: bigger protocols draw more farmers, so the
+//                  pool splits thinner
+//   expected value the pool split evenly across the farmers, with a range of a
+//                  third to three times for dilution either way
+//   net EV         expected value minus gas, time and opportunity cost
+//   verdict        FARM when net EV clears $100, THIN when it clears $0, SKIP
+//                  when the costs eat the whole expected value
+//
+// Nothing here names a protocol: the same rules build every plan, and the same
+// thresholds judge every verdict.
 
 import type { SnapshotProtocol } from './model.ts';
 
 /** One farm step as the board carries it: a single trimmed string. */
 export type FarmPlan = string[];
+
+/** A plan's verdict: worth farming, marginal, or not worth the costs. */
+export type FarmVerdict = 'FARM' | 'THIN' | 'SKIP';
+
+/** A plan's economics, as the detail view states them. */
+export interface FarmEconomics {
+  capital_usd: number;
+  gas_per_tx_usd: number;
+  tx_count: number;
+  gas_total_usd: number;
+  minutes: number;
+  time_cost_usd: number;
+  opportunity_cost_usd: number;
+  cost_total_usd: number;
+  hold_days: number;
+  pool_usd: number;
+  farmers: number;
+  ev_low_usd: number;
+  ev_mid_usd: number;
+  ev_high_usd: number;
+  net_ev_usd: number;
+  verdict: FarmVerdict;
+}
+
+/** The economics' working assumptions, as the dashboard states them. */
+export const FARM_ASSUMPTIONS = {
+  pool_share: 0.07,
+  farmers_per_sqrt_million: 1000,
+  farmers_floor: 500,
+  farmers_cap: 500000,
+  ev_range: 3,
+  hourly_rate_usd: 25,
+  opportunity_apr: 0.05,
+  farm_threshold_usd: 100,
+};
 
 /** Typical gas for one simple transaction on a chain, in whole US dollars. */
 const GAS_BY_CHAIN: Record<string, number> = {
@@ -78,6 +134,69 @@ export function holdDaysFor(ageDays: number | null): number {
   return 30;
 }
 
+/** Whole dollars, for the economics object and the plan's own words. */
+function whole(n: number): number {
+  return Math.max(0, Math.round(n));
+}
+
+/** A dollar figure in words: $1.2M, $48K, $222. */
+export function moneyShort(n: number): string {
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${Math.round(n)}`;
+}
+
+/** A count in words: 52,478 farmers. */
+function countLabel(n: number): string {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/**
+ * A protocol's farm economics: what the plan costs, what the airdrop is worth,
+ * and the verdict. The expected value splits the pool evenly across the
+ * farmers the protocol's size draws; the range either side is dilution.
+ */
+export function farmEconomics(p: SnapshotProtocol, ageDays: number | null, impliedValueUsd: number): FarmEconomics {
+  const a = FARM_ASSUMPTIONS;
+  const capital = capitalFor(p);
+  const gas = gasFor(p);
+  const hold = holdDaysFor(ageDays);
+  const weeks = Math.ceil(hold / 7);
+  const txCount = 2 + weeks + 1;
+  const gasTotal = txCount * gas;
+  const minutes = 15 + 10 * weeks + 10 + 5 + 5;
+  const timeCost = (minutes / 60) * a.hourly_rate_usd;
+  const opportunity = capital * a.opportunity_apr * (hold / 365);
+  const costTotal = gasTotal + timeCost + opportunity;
+  const pool = impliedValueUsd * a.pool_share;
+  const farmers = Math.min(
+    a.farmers_cap,
+    Math.max(a.farmers_floor, Math.round(a.farmers_per_sqrt_million * Math.sqrt(p.tvl_usd / 1_000_000))),
+  );
+  const evMid = farmers > 0 ? pool / farmers : 0;
+  const netEv = evMid - costTotal;
+  const verdict: FarmVerdict = netEv >= a.farm_threshold_usd ? 'FARM' : netEv > 0 ? 'THIN' : 'SKIP';
+  return {
+    capital_usd: capital,
+    gas_per_tx_usd: gas,
+    tx_count: txCount,
+    gas_total_usd: whole(gasTotal),
+    minutes,
+    time_cost_usd: whole(timeCost),
+    opportunity_cost_usd: whole(opportunity),
+    cost_total_usd: whole(costTotal),
+    hold_days: hold,
+    pool_usd: whole(pool),
+    farmers,
+    ev_low_usd: whole(evMid / a.ev_range),
+    ev_mid_usd: whole(evMid),
+    ev_high_usd: whole(evMid * a.ev_range),
+    net_ev_usd: Math.round(netEv),
+    verdict,
+  };
+}
+
 /** The category's one action, in words a farmer can follow. */
 function actionFor(p: SnapshotProtocol, capital: number, chain: string): string {
   const c = (p.category ?? '').toLowerCase();
@@ -140,33 +259,48 @@ function fitStep(text: string): string {
 }
 
 /**
- * A protocol's farm plan: six steps, each an action with a cost and a time.
- * The plan is derived from the protocol's own record (category, chains, TVL,
- * age), never from a hand-written list of names.
+ * A protocol's farm plan: six steps, each an action with a cost and a time, and
+ * the fourth step carries the whole economics — expected value, costs, net and
+ * verdict — so the plan is netted to the dollar, not a list of chores.
  */
-export function farmPlan(p: SnapshotProtocol, ageDays: number | null): FarmPlan {
+export function farmPlan(
+  p: SnapshotProtocol,
+  ageDays: number | null,
+  impliedValueUsd: number,
+  economics: FarmEconomics,
+): FarmPlan {
   const chain = planChain(p);
-  const gas = gasFor(p);
-  const capital = capitalFor(p);
-  const hold = holdDaysFor(ageDays);
+  const gas = economics.gas_per_tx_usd;
+  const capital = economics.capital_usd;
+  const hold = economics.hold_days;
   const action = actionFor(p, capital, chain);
-  const weeklyGas = Math.max(1, Math.round(gas * 2));
+  const weeks = Math.ceil(hold / 7);
+  const net = economics.net_ev_usd;
+  const netLabel = net >= 0 ? `about $${net}` : `about -$${Math.abs(net)}`;
+  const verdictLine =
+    economics.verdict === 'FARM'
+      ? 'Verdict: FARM — the expected value clears the costs by a wide margin.'
+      : economics.verdict === 'THIN'
+        ? 'Verdict: THIN — the expected value barely clears the costs; farm it only if you are already on this chain.'
+        : 'Verdict: SKIP — the costs eat the whole expected value; a larger position or a cheaper chain would be needed.';
   return [
     fitStep(
       `Open a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline. ` +
-        `Budget about $${gas} of gas on ${chain} for the first transaction; allow 5 minutes.`,
+        `Budget about $${gas} of gas on ${chain} for the first transaction; allow 15 minutes.`,
     ),
     fitStep(
       `${action} ` +
-        `Budget the $${capital} of capital plus about $${gas} of gas; allow 15 minutes to set it up.`,
+        `Budget the $${capital} of capital plus about $${gas * 2} of gas for the setup; allow 15 minutes.`,
     ),
     fitStep(
-      `Make one qualifying action each week, such as a deposit, a swap, a borrow or a vote, so the wallet ` +
-        `stays active across snapshots. Budget about $${weeklyGas} of gas a week; allow 10 minutes a week.`,
+      `Make one qualifying action each week for ${weeks} weeks, such as a deposit, a swap, a borrow or a vote, ` +
+        `so the wallet stays active across snapshots. Budget about $${gas} of gas a week; allow 10 minutes a week.`,
     ),
     fitStep(
-      `Hold the position for at least ${hold} days so the activity is counted in more than one snapshot. ` +
-        `Budget the $${capital} staying in the position; allow ${hold} days.`,
+      `Check the math before you commit: if 7% of the ${moneyShort(impliedValueUsd)} implied value reaches ` +
+        `about ${countLabel(economics.farmers)} farmers, one farmer expects about $${economics.ev_mid_usd} ` +
+        `($${economics.ev_low_usd}–$${economics.ev_high_usd}) against about $${economics.cost_total_usd} of gas, time and capital costs. ` +
+        `Net ${netLabel}. ${verdictLine}`,
     ),
     fitStep(
       `Before you withdraw, open the protocol's own points or rewards page and claim only from the link it ` +
