@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — pre-token protocols ranked by implied value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="radar-mark" aria-hidden="true"><span class="sweep"></span><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span></div>
+    <div>
+      <h1>Token Radar</h1>
+      <p class="tagline">Protocols with no token yet, ranked by what a token would be worth if their record stayed as it is.</p>
+    </div>
+  </div>
+  <dl class="stats" id="stats"></dl>
+</header>
+
+<section class="model" id="model"></section>
+
+<section class="controls" aria-label="Board controls">
+  <label class="search">Search
+    <input id="q" type="search" placeholder="Name or slug…" autocomplete="off">
+  </label>
+  <label>Category
+    <select id="cat"><option value="">All categories</option></select>
+  </label>
+  <label>Chain
+    <select id="chain"><option value="">All chains</option></select>
+  </label>
+  <label class="check"><input id="wl" type="checkbox"> Watchlist only</label>
+  <span class="count" id="count"></span>
+</section>
+
+<section class="detail" id="detail" hidden></section>
+
+<main>
+  <table class="board" id="board">
+    <thead>
+      <tr>
+        <th data-sort="rank" scope="col">Rank</th>
+        <th data-sort="name" scope="col">Protocol</th>
+        <th data-sort="category" scope="col">Category</th>
+        <th data-sort="tvl_usd" scope="col" class="num">TVL</th>
+        <th data-sort="change_7d" scope="col" class="num">7d</th>
+        <th data-sort="age_days" scope="col" class="num">Age</th>
+        <th data-sort="implied_value_usd" scope="col" class="num">Implied value</th>
+        <th scope="col" class="num">Farm</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p class="empty" id="empty" hidden>No protocol matches these filters.</p>
+</main>
+
+<section class="live">
+  <h2>Already trading — not ranked</h2>
+  <p class="live-note">These protocols already have a token, so the market prices them: the table shows their market cap, not a model value. They are here for comparison only and never enter the ranked board.</p>
+  <table class="board live-table">
+    <thead>
+      <tr>
+        <th scope="col">Protocol</th>
+        <th scope="col">Category</th>
+        <th scope="col" class="num">TVL</th>
+        <th scope="col" class="num">Market cap</th>
+        <th scope="col" class="num">7d</th>
+      </tr>
+    </thead>
+    <tbody id="live-rows"></tbody>
+  </table>
+</section>
+
+<footer>
+  <p>Implied value is this entry's own claim, never make.fun's: TVL × 0.30, adjusted for seven-day growth, tenure with no token, and chain breadth. The snapshot is DefiLlama's record as fetched on the date above; a protocol is called pre-token because its record shows no token, not because it has none. Farm steps are a starting plan, not financial advice.</p>
+</footer>
+
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
