@@ -20,6 +20,8 @@
 
 <section class="model" id="model"></section>
 
+<section class="validation" id="validation"></section>
+
 <section class="controls" aria-label="Board controls">
   <label class="search">Search
     <input id="q" type="search" placeholder="Name or slug…" autocomplete="off">
@@ -47,7 +49,7 @@
         <th data-sort="change_7d" scope="col" class="num">7d</th>
         <th data-sort="age_days" scope="col" class="num">Age</th>
         <th data-sort="implied_value_usd" scope="col" class="num">Implied value</th>
-        <th scope="col" class="num">Farm</th>
+        <th data-sort="net_ev_usd" scope="col" class="num">Verdict</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -73,7 +75,7 @@
 </section>
 
 <footer>
-  <p>Implied value is this entry's own claim, never make.fun's: TVL × 0.30, adjusted for seven-day growth, tenure with no token, and chain breadth. The snapshot is DefiLlama's record as fetched on the date above; a protocol is called pre-token because its record shows no token, not because it has none. Farm steps are a starting plan, not financial advice.</p>
+  <p>Implied value is this entry's own claim, never make.fun's: it is fitted from the snapshot's own tokenized protocols — each category's market-cap-to-TVL multiple, shrunk toward the global median, scaled by a size curve fitted on log market cap against log TVL — then adjusted a little for seven-day growth, tenure with no token, and chain breadth. The fit is validated out of sample on the comps themselves; the numbers are in the validation panel above. Farm economics assume 7% of the implied value reaches the community and split it across the farmers a protocol's size draws; they are a starting plan, not financial advice. The snapshot is DefiLlama's record as fetched on the date above; a protocol is called pre-token because its record shows no token, not because it has none.</p>
 </footer>
 
 <script src="../data.js"></script>

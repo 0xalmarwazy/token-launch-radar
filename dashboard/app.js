@@ -2,6 +2,11 @@
 // into a sortable, filterable board with a detail view per protocol. No fetch,
 // no network, no framework: the whole dataset is already on the page.
 //
+// The page states the model it runs on: a comps-fitted valuation, validated out
+// of sample on the snapshot's own tokenized protocols. The model strip names the
+// fit, the validation panel names the out-of-sample numbers, and each detail
+// view names the row's own comps, multiple and farm economics.
+//
 // Deep links, for screenshots and sharing:
 //   #detail=<slug>  opens one protocol's detail view
 //   #cat=<category> #chain=<chain> #q=<text> #wl=1  set the filters
@@ -39,6 +44,11 @@
     return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
+  function signedMoney(n) {
+    if (n == null || !isFinite(n)) return '—';
+    return (n < 0 ? '−$' : '$') + Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
   function pct(v) {
     if (v == null || !isFinite(v)) return '<span class="flat">—</span>';
     var cls = v > 0.05 ? 'up' : v < -0.05 ? 'down' : 'flat';
@@ -56,6 +66,13 @@
     if (!chains || chains.length === 0) return '—';
     if (chains.length <= 3) return chains.join(', ');
     return chains.slice(0, 3).join(', ') + ' +' + (chains.length - 3);
+  }
+
+  function verdictBadge(v, net) {
+    var cls = v === 'FARM' ? 'farm' : v === 'THIN' ? 'thin' : 'skip';
+    var label = v === 'FARM' ? 'FARM' : v === 'THIN' ? 'THIN' : 'SKIP';
+    return '<span class="verdict ' + cls + '">' + label + '</span>' +
+      '<br><span class="net">' + signedMoney(net) + ' net</span>';
   }
 
   /* ---------- state ---------- */
@@ -86,37 +103,80 @@
     }
   }
 
-  /* ---------- header, model strip, filters ---------- */
+  /* ---------- header, model strip, validation, filters ---------- */
 
   function renderStats() {
+    var farms = 0;
+    RADAR.rows.forEach(function (r) { if (r.verdict === 'FARM') farms++; });
     var el = document.getElementById('stats');
     el.innerHTML =
       '<div><dt>Snapshot</dt><dd>' + esc(RADAR.as_of) + '</dd></div>' +
       '<div><dt>Watchlist</dt><dd>' + RADAR.watchlist_size + '</dd></div>' +
       '<div><dt>Board rows</dt><dd>' + RADAR.board_size + '</dd></div>' +
       '<div><dt>Early finds</dt><dd>' + RADAR.early_size + '</dd></div>' +
-      '<div><dt>Floor</dt><dd>' + money(RADAR.floor_usd) + '</dd></div>';
+      '<div><dt>Comps fitted</dt><dd>' + RADAR.fit.comps + '</dd></div>' +
+      '<div><dt>Worth farming</dt><dd>' + farms + '</dd></div>';
   }
 
   function renderModel() {
-    var m = RADAR.model;
+    var fit = RADAR.fit;
     var top = RADAR.rows[0];
     var earlyTop = null;
     for (var i = 0; i < RADAR.rows.length; i++) {
       if (!RADAR.rows[i].on_watchlist) { earlyTop = RADAR.rows[i]; break; }
     }
+    var topCats = fit.categories.slice(0, 4).map(function (c) {
+      return esc(c.category) + ' ' + c.fitted_ratio.toFixed(2) + '× (' + c.comps + ')';
+    }).join(', ');
     document.getElementById('model').innerHTML =
-      '<strong>How the value is scored.</strong> ' +
-      '<code>implied = TVL × ' + m.base_multiple + ' × growth × tenure × breadth</code> — ' +
-      'growth from the 7-day TVL change (clamped ' + m.growth_floor + '% to +' + m.growth_cap + '%, weight ' + m.growth_weight + '), ' +
-      'tenure from days listed with no token (0.70 at day zero to 1.00 at three years), ' +
-      'breadth from chains run (+' + Math.round(m.breadth_per_chain * 100) + '% each, capped at six). ' +
+      '<strong>How the value is scored — fitted from the market, not assumed.</strong> ' +
+      'The model prices each pre-token protocol off the snapshot\'s own ' + fit.comps + ' tokenized comparables: ' +
+      'each category\'s median market-cap-to-TVL multiple, shrunk toward the global median of ' +
+      '<code>' + fit.global_ratio.toFixed(3) + '×</code> so a thin category cannot set its own price, ' +
+      'then scaled by a size curve fitted on log market cap against log TVL ' +
+      '(slope <code>' + fit.size_slope.toFixed(2) + '</code>: the market pays a lower multiple as protocols grow). ' +
+      'Small overlays follow for seven-day growth, tenure with no token and chain breadth. ' +
+      'Category multiples, most comps first: ' + topCats + '. ' +
       'Every row is a protocol whose record shows no token; the ' + RADAR.watchlist_size + ' on the watchlist are the floor, ' +
       'and the ' + RADAR.early_size + ' below it are the radar\'s own finds. ' +
       'Top of the board: <strong>' + esc(top.name) + '</strong> at ' + money(top.implied_value_usd) +
       (earlyTop
         ? '; top early find: <strong>' + esc(earlyTop.name) + '</strong> at rank ' + earlyTop.rank + ', ' + money(earlyTop.implied_value_usd) + '.'
         : '.');
+  }
+
+  function renderValidation() {
+    var v = RADAR.validation;
+    var fit = RADAR.fit;
+    var ts = v.time_split;
+    var catRows = fit.categories.slice(0, 6).map(function (c) {
+      return '<tr><td>' + esc(c.category) + '</td><td class="num">' + c.comps + '</td>' +
+        '<td class="num">' + c.median_ratio.toFixed(2) + '×</td>' +
+        '<td class="num"><strong>' + c.fitted_ratio.toFixed(2) + '×</strong></td></tr>';
+    }).join('');
+    document.getElementById('validation').innerHTML =
+      '<h2>Out-of-sample validation — the model tested on the market caps it never saw</h2>' +
+      '<div class="val-grid">' +
+      '<div class="val-cell"><div class="k">5-fold cross-validation</div><div class="v">' + v.cv.median_factor_error.toFixed(2) + '×</div>' +
+      '<div class="d">median error predicting held-out comps\' market caps, n=' + v.cv.n +
+      '; ' + Math.round(v.cv.within_2x * 100) + '% within 2×, ' + Math.round(v.cv.within_3x * 100) + '% within 3×</div></div>' +
+      (ts
+        ? '<div class="val-cell"><div class="k">Time split — fit on the past, tested on the future</div><div class="v">' + ts.median_factor_error.toFixed(2) + '×</div>' +
+          '<div class="d">fitted on ' + ts.train_n + ' comps listed before ' + esc(ts.split_date) +
+          ', tested on the ' + ts.test_n + ' listed after; ' + Math.round(ts.within_3x * 100) + '% within 3×</div></div>'
+        : '') +
+      '<div class="val-cell"><div class="k">Bootstrap of the global multiple</div><div class="v">' +
+      v.bootstrap.median.toFixed(3) + '×</div>' +
+      '<div class="d">90% interval ' + v.bootstrap.median_low.toFixed(3) + '×–' + v.bootstrap.median_high.toFixed(3) +
+      '× over ' + v.bootstrap.draws + ' resamples of the comps</div></div>' +
+      '<div class="val-cell"><div class="k">Flat 0.30× multiple, same test</div><div class="v">' + v.baseline_median_factor_error.toFixed(2) + '×</div>' +
+      '<div class="d">the previous version\'s model, scored the same way: the comps fit cuts the median error from ' +
+      v.baseline_median_factor_error.toFixed(2) + '× to ' + v.cv.median_factor_error.toFixed(2) + '×</div></div>' +
+      '</div>' +
+      '<table class="cat-table"><thead><tr><th>Category</th><th class="num">Comps</th><th class="num">Median multiple</th><th class="num">Fitted multiple</th></tr></thead>' +
+      '<tbody>' + catRows + '</tbody></table>' +
+      '<p class="val-note">Fitted multiples shrink each category\'s median toward the global median (prior weight 8 comps) and clamp to half–twice the global, so one outlier comp cannot decide a category. ' +
+      fit.excluded + ' tokenized protocols were excluded from the fit: exchanges, versioned pools carrying a parent\'s token, and ratios outside 0.001×–20×.</p>';
   }
 
   function fillSelect(id, values) {
@@ -200,7 +260,7 @@
         '<td class="num">' + pct(r.change_7d) + '</td>' +
         '<td class="num">' + ageLabel(r.age_days) + '</td>' +
         '<td class="num"><strong>' + money(r.implied_value_usd) + '</strong></td>' +
-        '<td class="num">' + r.farm_steps.length + ' steps</td>' +
+        '<td class="num">' + verdictBadge(r.verdict, r.net_ev_usd) + '</td>' +
         '</tr>';
     });
     tbody.innerHTML = html;
@@ -230,9 +290,17 @@
       panel.innerHTML = '';
       return;
     }
-    var m = RADAR.model;
-    var base = Math.round(r.tvl_usd * m.base_multiple);
+    var m = r.model;
+    var f = r.farm;
     var steps = r.farm_steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('');
+    var comps = m.nearest.map(function (c) {
+      return '<li><strong>' + esc(c.name) + '</strong> <span class="slug">' + esc(c.slug) + '</span> — ' + c.ratio.toFixed(2) + '× market cap / TVL</li>';
+    }).join('');
+    var verdictNote = r.verdict === 'FARM'
+      ? 'Worth farming: the expected value clears the costs by more than $100.'
+      : r.verdict === 'THIN'
+        ? 'Marginal: the expected value barely clears the costs.'
+        : 'Not worth it at this size: the costs eat the whole expected value.';
     panel.hidden = false;
     panel.innerHTML =
       '<div class="detail-head"><h2>' + esc(r.name) + ' <span class="slug">#' + r.rank + ' · ' + esc(r.slug) + '</span></h2>' +
@@ -242,6 +310,7 @@
       (r.on_watchlist ? '<span class="badge watch">★ On the watchlist</span>' : '<span class="badge">Early find — below the watchlist floor</span>') +
       '<span class="badge">' + esc(r.category || 'No category') + '</span>' +
       '<span class="badge">' + esc(chainsLabel(r.chains)) + '</span>' +
+      '<span class="badge verdict-badge ' + (r.verdict === 'FARM' ? 'farm' : r.verdict === 'THIN' ? 'thin' : 'skip') + '">' + r.verdict + ' · ' + signedMoney(r.net_ev_usd) + ' net EV</span>' +
       '</div>' +
       '<div class="detail-grid">' +
       '<div class="cell"><div class="k">Implied value</div><div class="v">' + moneyFull(r.implied_value_usd) + '</div></div>' +
@@ -250,10 +319,24 @@
       '<div class="cell"><div class="k">Tracked since</div><div class="v small">' + esc(r.listed_at || 'Unknown') + ' · ' + ageLabel(r.age_days) + '</div></div>' +
       '</div>' +
       '<div class="model-break"><strong>How ' + moneyFull(r.implied_value_usd) + ' is reached:</strong> ' +
-      '<code>' + moneyFull(base) + ' base</code> (TVL × ' + m.base_multiple + ') × ' +
-      '<code>' + r.growth_multiplier.toFixed(2) + ' growth</code> × ' +
-      '<code>' + r.tenure_multiplier.toFixed(2) + ' tenure</code> × ' +
-      '<code>' + r.breadth_multiplier.toFixed(2) + ' breadth</code> across ' + (r.chains || []).length + ' chain' + ((r.chains || []).length === 1 ? '' : 's') + '.</div>' +
+      'TVL ' + moneyFull(r.tvl_usd) + ' × the fitted <code>' + (r.category || 'no-category') + ' multiple ' + m.category_ratio.toFixed(2) + '×</code> ' +
+      '(' + m.category_comps + ' comp' + (m.category_comps === 1 ? '' : 's') + ' in this category, shrunk toward the global ' + m.global_ratio.toFixed(2) + '×) ' +
+      '× the size factor <code>' + m.size_factor.toFixed(2) + '</code> (curve slope ' + m.size_slope.toFixed(2) + ') ' +
+      '= <code>' + moneyFull(m.comps_value_usd) + ' comps value</code>, ' +
+      'then × <code>' + m.growth_multiplier.toFixed(2) + ' growth</code> × ' +
+      '<code>' + m.tenure_multiplier.toFixed(2) + ' tenure</code> × ' +
+      '<code>' + m.breadth_multiplier.toFixed(2) + ' breadth</code> across ' + (r.chains || []).length + ' chain' + ((r.chains || []).length === 1 ? '' : 's') + '.</div>' +
+      '<div class="comps"><h3>Nearest comparables</h3><ul>' + comps + '</ul>' +
+      '<p class="comp-note">Same-category comps first, by TVL distance. The fitted multiple is the category median shrunk toward the global median, so one outlier comp cannot set the price.</p></div>' +
+      '<div class="econ"><h3>Farm economics — netted to the dollar</h3>' +
+      '<table class="econ-table"><tbody>' +
+      '<tr><td>Position</td><td class="num">$' + f.capital_usd + ' capital, ' + f.hold_days + ' days, ' + f.tx_count + ' transactions</td></tr>' +
+      '<tr><td>Costs</td><td class="num">$' + f.gas_total_usd + ' gas + $' + f.time_cost_usd + ' time (' + f.minutes + ' min at $25/hr) + $' + f.opportunity_cost_usd + ' opportunity = <strong>$' + f.cost_total_usd + '</strong></td></tr>' +
+      '<tr><td>Airdrop pool</td><td class="num">7% of ' + money(r.implied_value_usd) + ' = ' + money(f.pool_usd) + '</td></tr>' +
+      '<tr><td>Farmers sharing it</td><td class="num">~' + f.farmers.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '</td></tr>' +
+      '<tr><td>Expected value</td><td class="num"><strong>$' + f.ev_mid_usd + '</strong> (range $' + f.ev_low_usd + '–$' + f.ev_high_usd + ')</td></tr>' +
+      '<tr><td>Net expected value</td><td class="num"><strong>' + signedMoney(f.net_ev_usd) + '</strong> — ' + verdictNote + '</td></tr>' +
+      '</tbody></table></div>' +
       '<div class="farm"><h3>Farm plan — six steps</h3><ol>' + steps + '</ol></div>';
     document.getElementById('close-detail').addEventListener('click', function () {
       state.selected = null;
@@ -339,6 +422,7 @@
   readHash();
   renderStats();
   renderModel();
+  renderValidation();
   renderFilters();
   renderAll();
 })();

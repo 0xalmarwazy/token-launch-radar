@@ -392,3 +392,135 @@ footer {
   font-size: 13px;
   max-width: 900px;
 }
+
+/* ---- validation panel ---- */
+
+.validation {
+  margin: 20px 32px 0;
+  padding: 18px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.validation h2 { margin: 0 0 14px; font-size: 16px; letter-spacing: -0.01em; }
+
+.val-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.val-cell {
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+
+.val-cell .k {
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.val-cell .v {
+  margin-top: 3px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.val-cell .d { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+.cat-table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.cat-table th,
+.cat-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+}
+
+.cat-table th {
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cat-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.val-note { margin: 12px 0 0; color: var(--faint); font-size: 13px; }
+
+/* ---- verdict badges ---- */
+
+.verdict {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.verdict.farm { background: rgba(52, 211, 153, 0.16); color: var(--up); }
+.verdict.thin { background: rgba(245, 179, 1, 0.16); color: var(--gold); }
+.verdict.skip { background: rgba(148, 163, 184, 0.14); color: var(--muted); }
+
+.net { color: var(--faint); font-size: 12px; }
+
+.badge.verdict-badge.farm { color: var(--up); border: 1px solid rgba(52, 211, 153, 0.4); }
+.badge.verdict-badge.thin { color: var(--gold); border: 1px solid rgba(245, 179, 1, 0.4); }
+.badge.verdict-badge.skip { color: var(--muted); border: 1px solid rgba(148, 163, 184, 0.4); }
+
+/* ---- detail: comps + economics ---- */
+
+.comps { margin-top: 18px; }
+
+.comps h3 { margin: 0 0 8px; font-size: 15px; }
+
+.comps ul { margin: 0; padding-left: 22px; }
+
+.comps li { margin: 5px 0; color: var(--muted); }
+
+.comps li::marker { color: var(--accent); }
+
+.comps li strong { color: var(--text); font-weight: 600; }
+
+.comp-note { margin: 8px 0 0; color: var(--faint); font-size: 13px; }
+
+.econ { margin-top: 18px; }
+
+.econ h3 { margin: 0 0 10px; font-size: 15px; }
+
+.econ-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.econ-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  vertical-align: top;
+}
+
+.econ-table td:first-child {
+  width: 180px;
+  color: var(--faint);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.econ-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.econ-table td strong { color: var(--text); }
